@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Climashield Jacket - 3D Prototype</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Three.js for 3D Rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <!-- GSAP for smooth 3D animations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Rajdhani:wght@500;700&display=swap');
+
+        body {
+            margin: 0;
+            overflow: hidden; /* Prevent body scroll, handle internally */
+            background-color: #050505;
+            color: #e2e8f0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        h1, h2, h3, h4 {
+            font-family: 'Rajdhani', sans-serif;
+        }
+
+        /* Glassmorphism utilities */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3b82f6; 
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #60a5fa; 
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 60%;
+            height: 100vh;
+            z-index: 1;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 40%;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 10;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+        }
+
+        #controls-overlay {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            z-index: 10;
+            width: calc(60% - 60px);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        /* Mobile Responsive adjustments */
+        @media (max-width: 1024px) {
+            #canvas-container {
+                width: 100%;
+                height: 50vh;
+                position: relative;
+            }
+            #ui-layer {
+                width: 100%;
+                height: 50vh;
+                position: relative;
+                box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
+            }
+            #controls-overlay {
+                width: calc(100% - 40px);
+                bottom: calc(50vh + 20px);
+                left: 20px;
+            }
+            body {
+                overflow: auto;
+                display: flex;
+                flex-direction: column;
+            }
+        }
+
+        .weather-btn {
+            transition: all 0.3s ease;
+        }
+        .weather-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+        }
+        .weather-btn.active {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.2);
+        }
+
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(59, 130, 246, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- 3D Controls Overlay -->
+    <div id="controls-overlay" class="pointer-events-none">
+        
+        <!-- Interaction Hint -->
+        <div class="glass-panel p-4 rounded-xl flex items-center justify-between pointer-events-auto">
+            <div>
+                <h3 class="text-white font-bold text-lg mb-1 flex items-center gap-2">
+                    <i data-lucide="layers" class="w-5 h-5 text-blue-400"></i>
+                    Prototype Interaction
+                </h3>
+                <p class="text-sm text-gray-400">Click the model or button to inspect internal components.</p>
+            </div>
+            <button id="explode-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-lg font-semibold uppercase tracking-wider transition-colors pulse-animation flex items-center gap-2 shadow-lg">
+                <i data-lucide="scan-line" class="w-5 h-5"></i>
+                Explode View
+            </button>
+        </div>
+
+        <!-- Weather Simulation Controls -->
+        <div class="glass-panel p-4 rounded-xl pointer-events-auto">
+            <h3 class="text-white font-bold text-sm uppercase tracking-widest mb-3 flex items-center gap-2">
+                <i data-lucide="cloud-lightning" class="w-4 h-4 text-yellow-400"></i>
+                Environment Simulation
+            </h3>
+            <div class="grid grid-cols-4 gap-2">
+                <button class="weather-btn active glass-panel py-2 px-3 rounded text-sm text-center flex flex-col items-center gap-1 border border-gray-700" data-weather="normal">
+                    <div class="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)]"></div>
+                    Normal
+                </button>
+                <button class="weather-btn glass-panel py-2 px-3 rounded text-sm text-center flex flex-col items-center gap-1 border border-gray-700" data-weather="wind">
+                    <div class="w-3 h-3 rounded-full bg-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.8)]"></div>
+                    Wind/Heat
+                </button>
+                <button class="weather-btn glass-panel py-2 px-3 rounded text-sm text-center flex flex-col items-center gap-1 border border-gray-700" data-weather="storm">
+                    <div class="w-3 h-3 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]"></div>
+                    Storm
+                </button>
+                <button class="weather-btn glass-panel py-2 px-3 rounded text-sm text-center flex flex-col items-center gap-1 border border-gray-700" data-weather="fog">
+                    <div class="w-3 h-3 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]"></div>
+                    Fog
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Information Deck Panel -->
+    <div id="ui-layer" class="glass-panel text-gray-300 p-8">
+        
+        <div class="mb-12 border-b border-gray-700 pb-8">
+            <div class="inline-block bg-blue-900/50 text-blue-300 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-4 border border-blue-700/50">
+                Official Concept Pitch
+            </div>
+            <h1 class="text-4xl md:text-5xl font-extrabold text-white mb-4 leading-tight">
+                CLIMASHIELD <span class="text-blue-500">JACKET</span>
+            </h1>
+            <h2 class="text-xl text-gray-400 font-medium">
+                Adaptive Climate & Weather Alert Uniform for Merchant Navy & Army Officers
+            </h2>
+        </div>
+
+        <section class="mb-10">
+            <h3 class="text-2xl font-bold text-white mb-4 flex items-center gap-3">
+                <i data-lucide="target" class="w-6 h-6 text-red-400"></i> Problem Statement
+            </h3>
+            <p class="leading-relaxed bg-black/30 p-5 rounded-lg border border-gray-800">
+                Officers in the Merchant Navy and Army work in rapidly changing weather conditions (heat, cold, rain, storms), but their current jackets are static and provide no real-time weather awareness. This leads to discomfort, delayed reaction times, and significant safety risks.
+            </p>
+        </section>
+
+        <section class="mb-10">
+            <h3 class="text-2xl font-bold text-white mb-4 flex items-center gap-3">
+                <i data-lucide="cpu" class="w-6 h-6 text-blue-400"></i> The Core Idea
+            </h3>
+            <p class="text-lg text-blue-100 font-medium leading-relaxed">
+                A smart uniform jacket that adapts to temperature automatically and gives real-time weather alerts through a smart collar without distracting the officer.
+            </p>
+            <ul class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
+                <li class="flex items-center gap-2 bg-gray-800/50 p-3 rounded"><i data-lucide="check-circle" class="w-5 h-5 text-green-400"></i> Combines comfort + safety</li>
+                <li class="flex items-center gap-2 bg-gray-800/50 p-3 rounded"><i data-lucide="smartphone-off" class="w-5 h-5 text-red-400"></i> No phone dependency</li>
+                <li class="flex items-center gap-2 bg-gray-800/50 p-3 rounded"><i data-lucide="eye" class="w-5 h-5 text-purple-400"></i> Alerts are visual + subtle</li>
+                <li class="flex items-center gap-2 bg-gray-800/50 p-3 rounded"><i data-lucide="anchor" class="w-5 h-5 text-blue-400"></i> For sea & field conditions</li>
+            </ul>
+        </section>
+
+        <div class="h-px w-full bg-gradient-to-r from-transparent via-gray-600 to-transparent my-10"></div>
+
+        <section class="mb-10">
+            <h3 class="text-2xl font-bold text-white mb-6">System Breakdown</h3>
+            
+            <div class="space-y-6">
+                <!-- Part A -->
+                <div class="bg-gray-900/60 p-6 rounded-xl border border-gray-700 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-1 h-full bg-orange-500"></div>
+                    <h4 class="text-xl font-bold text-white mb-2">Part A: Smart Adaptive Jacket</h4>
+                    <p class="text-sm text-gray-400 mb-4">Internal temperature sensors and reactive materials automatically maintain optimal body temperature.</p>
+                    
+                    <div class="grid grid-cols-1 gap-4 text-sm">
+                        <div class="flex items-start gap-3">
+                            <div class="bg-orange-500/20 p-2 rounded text-orange-400"><i data-lucide="sun" class="w-5 h-5"></i></div>
+                            <div><strong class="text-orange-300">Hot Conditions:</strong> Micro-air vents open mechanically. Inner lining becomes breathable to release heat.</div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <div class="bg-blue-500/20 p-2 rounded text-blue-400"><i data-lucide="snowflake" class="w-5 h-5"></i></div>
+                            <div><strong class="text-blue-300">Cold Conditions:</strong> Vents close tightly. Heat-retaining thermal layer activates to trap body heat.</div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <div class="bg-cyan-500/20 p-2 rounded text-cyan-400"><i data-lucide="cloud-rain" class="w-5 h-5"></i></div>
+                            <div><strong class="text-cyan-300">Rain/Humid:</strong> Water-repellent outer layer stiffens. Inner layer prevents sweat condensation buildup.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Part B -->
+                <div class="bg-gray-900/60 p-6 rounded-xl border border-gray-700 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-1 h-full bg-purple-500"></div>
+                    <h4 class="text-xl font-bold text-white mb-2">Part B: Weather-Alert Collar</h4>
+                    <p class="text-sm text-gray-400 mb-4">Peripheral vision LED strip in the collar alerts officers silently without breaking concentration.</p>
+                    
+                    <div class="grid grid-cols-2 gap-3 mt-4">
+                        <div class="bg-black/40 p-3 rounded border border-gray-800 flex items-center gap-3">
+                            <div class="w-4 h-4 rounded-full bg-blue-500 shadow-[0_0_10px_#3b82f6]"></div>
+                            <span class="text-sm font-semibold">Normal Weather</span>
+                        </div>
+                        <div class="bg-black/40 p-3 rounded border border-gray-800 flex items-center gap-3">
+                            <div class="w-4 h-4 rounded-full bg-yellow-400 shadow-[0_0_10px_#facc15]"></div>
+                            <span class="text-sm font-semibold">Strong Wind/Temp Shift</span>
+                        </div>
+                        <div class="bg-black/40 p-3 rounded border border-gray-800 flex items-center gap-3">
+                            <div class="w-4 h-4 rounded-full bg-red-500 shadow-[0_0_10px_#ef4444]"></div>
+                            <span class="text-sm font-semibold">Storm/Danger</span>
+                        </div>
+                        <div class="bg-black/40 p-3 rounded border border-gray-800 flex items-center gap-3">
+                            <div class="w-4 h-4 rounded-full bg-white shadow-[0_0_10px_#ffffff]"></div>
+                            <span class="text-sm font-semibold">Fog/Low Visibility</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="mb-10 bg-blue-900/20 p-6 rounded-xl border border-blue-900/50">
+            <h3 class="text-xl font-bold text-white mb-3 flex items-center gap-2">
+                <i data-lucide="book-open" class="w-5 h-5 text-blue-400"></i> Use-Case Scenario
+            </h3>
+            <p class="text-gray-300 italic mb-4">"A Merchant Navy officer on deck experiences sudden strong winds."</p>
+            <ol class="list-decimal list-inside space-y-2 text-sm text-gray-400 ml-2">
+                <li>The smart collar detects pressure drops and turns <strong class="text-yellow-400">Yellow</strong>, warning him.</li>
+                <li>Within minutes, the jacket automatically shifts to wind-resistant mode (vents close).</li>
+                <li>When a severe storm approaches, the collar flashes <strong class="text-red-400">Red</strong>.</li>
+                <li>The officer immediately takes necessary safety measures and secures the deck without needing to check an external device.</li>
+            </ol>
+        </section>
+
+        <div class="text-center pb-10">
+            <p class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500 italic">
+                “This jacket transforms a uniform into an intelligent survival tool.”
+            </p>
+        </div>
+
+    </div>
+
+    <script>
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // --- THREE.JS SETUP ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        // Set a subtle dark gradient background
+        scene.background = new THREE.Color(0x0a0f1a);
+        scene.fog = new THREE.FogExp2(0x0a0f1a, 0.02);
+
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+        camera.position.set(0, 1.5, 7);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 3;
+        controls.maxDistance = 12;
+        controls.target.set(0, 0, 0);
+        // Restrict angles slightly to keep it looking good
+        controls.maxPolarAngle = Math.PI / 1.5;
+
+        // --- LIGHTING ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 7);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        scene.add(dirLight);
+
+        const backLight = new THREE.DirectionalLight(0x4a90e2, 0.5);
+        backLight.position.set(-5, 5, -5);
+        scene.add(backLight);
+
+        // --- 3D PROTOTYPE CONSTRUCTION (CLIMASHIELD JACKET) ---
+        
+        // Materials
+        const outerMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x1a2436, 
+            roughness: 0.8, 
+            metalness: 0.1,
+            side: THREE.DoubleSide
+        });
+        
+        const innerMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0xdd6b20, // Thermal orange 
+            roughness: 0.9,
+            metalness: 0.0
+        });
+
+        const collarMaterial = new THREE.MeshStandardMaterial({
+            color: 0x111111,
+            emissive: 0x3b82f6, // Default Blue
+            emissiveIntensity: 2,
+            roughness: 0.4
+        });
+
+        const techMaterial = new THREE.MeshStandardMaterial({
+            color: 0x888888,
+            metalness: 0.9,
+            roughness: 0.2
+        });
+
+        // Jacket Group
+        const jacketGroup = new THREE.Group();
+        scene.add(jacketGroup);
+
+        // 1. Inner Thermal Layer (Slightly smaller)
+        const innerGeo = new THREE.CylinderGeometry(0.85, 0.95, 2.9, 32);
+        const innerLayer = new THREE.Mesh(innerGeo, innerMaterial);
+        innerLayer.scale.set(1, 1, 0.6); // Flatten to torso shape
+        innerLayer.position.y = -0.1;
+        innerLayer.castShadow = true;
+        jacketGroup.add(innerLayer);
+
+        // 2. Outer Weather Shell
+        const outerGeo = new THREE.CylinderGeometry(0.9, 1.0, 3.0, 32, 1, true); // Open ended
+        const outerLayer = new THREE.Mesh(outerGeo, outerMaterial);
+        outerLayer.scale.set(1, 1, 0.65);
+        outerLayer.castShadow = true;
+        outerLayer.receiveShadow = true;
+        jacketGroup.add(outerLayer);
+
+        // Shoulders / Top closure for outer layer
+        const shoulderGeo = new THREE.SphereGeometry(0.9, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+        const shoulders = new THREE.Mesh(shoulderGeo, outerMaterial);
+        shoulders.scale.set(1, 0.3, 0.65);
+        shoulders.position.y = 1.5;
+        outerLayer.add(shoulders); // Attach to outer layer so it moves with it
+
+        // 3. Smart Collar (Weather Alert System)
+        const collarGroup = new THREE.Group();
+        collarGroup.position.y = 1.6;
+        
+        const collarBaseGeo = new THREE.CylinderGeometry(0.5, 0.55, 0.3, 32);
+        const collarBase = new THREE.Mesh(collarBaseGeo, outerMaterial);
+        collarGroup.add(collarBase);
+
+        // LED Ring inside collar
+        const ledRingGeo = new THREE.TorusGeometry(0.51, 0.05, 16, 32);
+        const ledRing = new THREE.Mesh(ledRingGeo, collarMaterial);
+        ledRing.rotation.x = Math.PI / 2;
+        ledRing.position.y = 0.05;
+        collarGroup.add(ledRing);
+        
+        // Collar Point Light (glow effect)
+        const collarLight = new THREE.PointLight(0x3b82f6, 1, 3);
+        collarLight.position.set(0, 1.8, 0.5);
+        jacketGroup.add(collarLight);
+
+        jacketGroup.add(collarGroup);
+
+        // 4. Micro Air Vents (Moveable)
+        const vents = [];
+        const ventGeo = new THREE.BoxGeometry(0.3, 0.1, 0.05);
+        for(let i=0; i<3; i++) {
+            // Left chest vents
+            const ventL = new THREE.Mesh(ventGeo, techMaterial);
+            ventL.position.set(-0.4, 0.5 - (i * 0.3), 0.6);
+            ventL.rotation.y = -0.2;
+            outerLayer.add(ventL);
+            vents.push({ mesh: ventL, baseRotX: 0, openRotX: -Math.PI/4 });
+
+            // Right chest vents
+            const ventR = new THREE.Mesh(ventGeo, techMaterial);
+            ventR.position.set(0.4, 0.5 - (i * 0.3), 0.6);
+            ventR.rotation.y = 0.2;
+            outerLayer.add(ventR);
+            vents.push({ mesh: ventR, baseRotX: 0, openRotX: -Math.PI/4 });
+        }
+
+        // 5. Environmental Sensors & Controller Box
+        const sensorBox = new THREE.Group();
+        
+        const sBoxGeo = new THREE.BoxGeometry(0.2, 0.3, 0.1);
+        const sBox = new THREE.Mesh(sBoxGeo, techMaterial);
+        sensorBox.add(sBox);
+        
+        const sNodeGeo = new THREE.SphereGeometry(0.05, 16, 16);
+        const sNodeMaterial = new THREE.MeshStandardMaterial({color: 0x00ff00, emissive: 0x00ff00, emissiveIntensity: 1});
+        const sNode = new THREE.Mesh(sNodeGeo, sNodeMaterial);
+        sNode.position.set(0, 0.1, 0.05);
+        sensorBox.add(sNode);
+
+        sensorBox.position.set(-0.6, 1.0, 0.55);
+        sensorBox.rotation.y = -0.3;
+        outerLayer.add(sensorBox);
+
+        // Floating Floor pad
+        const floorGeo = new THREE.CylinderGeometry(2, 2, 0.1, 32);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x111520, roughness: 0.1, metalness: 0.5 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.position.y = -2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // --- PARTICLES SYSTEM (WEATHER SIMULATION) ---
+        const particleCount = 1000;
+        const particlesGeo = new THREE.BufferGeometry();
+        const posArray = new Float32Array(particleCount * 3);
+        const velArray = new Float32Array(particleCount * 3);
+
+        for(let i = 0; i < particleCount * 3; i+=3) {
+            // Spread particles in a box around the model
+            posArray[i] = (Math.random() - 0.5) * 10;
+            posArray[i+1] = Math.random() * 10; // Start high
+            posArray[i+2] = (Math.random() - 0.5) * 10;
+
+            velArray[i] = 0;
+            velArray[i+1] = 0;
+            velArray[i+2] = 0;
+        }
+
+        particlesGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        particlesGeo.setAttribute('velocity', new THREE.BufferAttribute(velArray, 3));
+
+        const particlesMat = new THREE.PointsMaterial({
+            size: 0.05,
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0, // Hidden initially
+            blending: THREE.AdditiveBlending
+        });
+
+        const particleSystem = new THREE.Points(particlesGeo, particlesMat);
+        scene.add(particleSystem);
+
+        let currentWeather = 'normal';
+
+        // --- ANIMATION & INTERACTION LOGIC ---
+
+        let isExploded = false;
+
+        function toggleExplode() {
+            isExploded = !isExploded;
+            const duration = 1.2;
+            const ease = "power3.inOut";
+
+            if (isExploded) {
+                // Explode out
+                gsap.to(outerLayer.position, { z: 1.2, duration: duration, ease: ease });
+                gsap.to(innerLayer.position, { z: -0.5, y: 0.2, duration: duration, ease: ease });
+                gsap.to(collarGroup.position, { y: 2.2, duration: duration, ease: ease });
+                
+                // Show tech box more clearly
+                gsap.to(sensorBox.position, { x: -1.2, z: 1.0, duration: duration, ease: ease });
+                gsap.to(sensorBox.scale, { x: 1.5, y: 1.5, z: 1.5, duration: duration, ease: ease });
+
+                document.getElementById('explode-btn').innerHTML = '<i data-lucide="shrink" class="w-5 h-5"></i> Assemble View';
+                lucide.createIcons();
+                document.getElementById('explode-btn').classList.remove('pulse-animation');
+                document.getElementById('explode-btn').classList.add('bg-purple-600', 'hover:bg-purple-500');
+                document.getElementById('explode-btn').classList.remove('bg-blue-600', 'hover:bg-blue-500');
+
+            } else {
+                // Assemble back
+                gsap.to(outerLayer.position, { z: 0, duration: duration, ease: ease });
+                gsap.to(innerLayer.position, { z: 0, y: -0.1, duration: duration, ease: ease });
+                gsap.to(collarGroup.position, { y: 1.6, duration: duration, ease: ease });
+                
+                gsap.to(sensorBox.position, { x: -0.6, z: 0.55, duration: duration, ease: ease });
+                gsap.to(sensorBox.scale, { x: 1, y: 1, z: 1, duration: duration, ease: ease });
+
+                document.getElementById('explode-btn').innerHTML = '<i data-lucide="scan-line" class="w-5 h-5"></i> Explode View';
+                lucide.createIcons();
+                document.getElementById('explode-btn').classList.add('bg-blue-600', 'hover:bg-blue-500');
+                document.getElementById('explode-btn').classList.remove('bg-purple-600', 'hover:bg-purple-500');
+            }
+        }
+
+        // Raycaster for clicking directly on the 3D model
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        container.addEventListener('click', (event) => {
+            // Calculate mouse position in normalized device coordinates (-1 to +1)
+            const rect = container.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / container.clientWidth) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / container.clientHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(jacketGroup.children, true);
+
+            if (intersects.length > 0) {
+                toggleExplode();
+            }
+        });
+
+        // UI Event Listeners
+        document.getElementById('explode-btn').addEventListener('click', toggleExplode);
+
+        const weatherBtns = document.querySelectorAll('.weather-btn');
+        weatherBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                // Update active state
+                weatherBtns.forEach(b => b.classList.remove('active'));
+                const targetBtn = e.currentTarget;
+                targetBtn.classList.add('active');
+
+                const mode = targetBtn.getAttribute('data-weather');
+                setWeatherMode(mode);
+            });
+        });
+
+        function setWeatherMode(mode) {
+            currentWeather = mode;
+            const duration = 0.5;
+
+            // Reset vents
+            vents.forEach(v => {
+                gsap.to(v.mesh.rotation, { x: v.baseRotX, duration: duration });
+            });
+
+            switch(mode) {
+                case 'normal':
+                    gsap.to(collarMaterial.color, { r: 0.1, g: 0.1, b: 0.1, duration: duration });
+                    gsap.to(collarMaterial.emissive, { r: 0, g: 0, b: 1, duration: duration }); // Blue
+                    collarLight.color.setHex(0x3b82f6);
+                    
+                    gsap.to(particlesMat, { opacity: 0, duration: 1 });
+                    scene.fog.color.setHex(0x0a0f1a);
+                    scene.fog.density = 0.02;
+                    break;
+
+                case 'wind': // Represents Hot/Wind
+                    gsap.to(collarMaterial.color, { r: 0.2, g: 0.2, b: 0.0, duration: duration });
+                    gsap.to(collarMaterial.emissive, { r: 1, g: 0.8, b: 0, duration: duration }); // Yellow
+                    collarLight.color.setHex(0xfacc15);
+
+                    // Open vents for cooling
+                    vents.forEach(v => {
+                        gsap.to(v.mesh.rotation, { x: v.openRotX, duration: 1, ease: "bounce.out" });
+                    });
+
+                    // Heat wave particles (floating up)
+                    particlesMat.color.setHex(0xffaa00);
+                    particlesMat.size = 0.1;
+                    gsap.to(particlesMat, { opacity: 0.5, duration: 1 });
+                    scene.fog.color.setHex(0x1a1510);
+                    scene.fog.density = 0.03;
+                    break;
+
+                case 'storm':
+                    gsap.to(collarMaterial.color, { r: 0.2, g: 0.0, b: 0.0, duration: duration });
+                    gsap.to(collarMaterial.emissive, { r: 1, g: 0, b: 0, duration: duration }); // Red
+                    collarLight.color.setHex(0xef4444);
+
+                    // Rain particles (falling fast)
+                    particlesMat.color.setHex(0xaaccff);
+                    particlesMat.size = 0.05;
+                    gsap.to(particlesMat, { opacity: 0.8, duration: 0.5 });
+                    scene.fog.color.setHex(0x050a10);
+                    scene.fog.density = 0.06;
+                    break;
+
+                case 'fog':
+                    gsap.to(collarMaterial.color, { r: 0.5, g: 0.5, b: 0.5, duration: duration });
+                    gsap.to(collarMaterial.emissive, { r: 1, g: 1, b: 1, duration: duration }); // White
+                    collarLight.color.setHex(0xffffff);
+
+                    gsap.to(particlesMat, { opacity: 0, duration: 1 });
+                    gsap.to(scene.fog, { density: 0.15, duration: 2 }); // Heavy fog
+                    scene.fog.color.setHex(0x2a303c);
+                    break;
+            }
+        }
+
+        // --- MAIN RENDER LOOP ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const time = clock.getElapsedTime();
+            const delta = clock.getDelta();
+
+            // Gentle floating animation for the jacket (when not exploded)
+            if (!isExploded) {
+                jacketGroup.position.y = Math.sin(time) * 0.1;
+                jacketGroup.rotation.y = Math.sin(time * 0.5) * 0.1;
+            }
+
+            // Pulse the sensor node
+            sNodeMaterial.emissiveIntensity = 0.5 + Math.sin(time * 5) * 0.5;
+
+            // Animate Weather Particles
+            if (particlesMat.opacity > 0) {
+                const positions = particleSystem.geometry.attributes.position.array;
+                
+                for(let i = 0; i < particleCount * 3; i+=3) {
+                    if (currentWeather === 'storm') {
+                        // Rain falls down fast
+                        positions[i+1] -= 0.3;
+                        positions[i] -= 0.02; // slight wind
+                        
+                        if (positions[i+1] < -2) {
+                            positions[i+1] = 10;
+                            positions[i] = (Math.random() - 0.5) * 10;
+                        }
+                    } else if (currentWeather === 'wind') {
+                        // Heat waves / dust moving up and right
+                        positions[i+1] += 0.05;
+                        positions[i] += 0.05 + Math.sin(time + i) * 0.02;
+
+                        if (positions[i+1] > 10) {
+                            positions[i+1] = -2;
+                            positions[i] = (Math.random() - 0.5) * 10;
+                        }
+                    }
+                }
+                particleSystem.geometry.attributes.position.needsUpdate = true;
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // --- WINDOW RESIZE HANDLING ---
+        window.addEventListener('resize', () => {
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            renderer.setSize(width, height);
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+        });
+
+    </script>
+</body>
+</html>
